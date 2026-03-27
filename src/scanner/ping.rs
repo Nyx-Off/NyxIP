@@ -74,10 +74,7 @@ async fn ping_command(ip: Ipv4Addr, timeout_ms: u32) -> Option<f64> {
     cmd.args(["-n", "1", "-w", &timeout_ms.to_string(), &ip.to_string()]);
 
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let output = cmd.output().await.ok()?;
     let elapsed = start.elapsed().as_secs_f64() * 1000.0;

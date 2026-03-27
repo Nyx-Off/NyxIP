@@ -13,6 +13,7 @@ pub struct ScanResult {
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
+#[allow(dead_code)]
 pub enum HostStatus {
     Alive,
     Dead,

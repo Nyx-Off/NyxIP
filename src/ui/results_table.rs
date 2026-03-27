@@ -79,7 +79,7 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
     let col_widths: [f32; 7] = [130.0, 170.0, 155.0, 140.0, 80.0, 150.0, 70.0];
 
     ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-        for (row_idx, result) in app.results.iter().enumerate() {
+        for result in app.results.iter() {
             if !app.show_dead && result.status == HostStatus::Dead {
                 continue;
             }
@@ -91,7 +91,8 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
             };
 
             let ip_str = result.ip.to_string();
-            let _row_id = ui.id().with(("row", row_idx));
+
+
 
             // Allocate full row rect for hover detection
             let total_width: f32 = col_widths.iter().sum::<f32>() + 12.0 * 6.0;
@@ -101,12 +102,10 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
                 egui::Sense::click(),
             );
 
-            // Hover highlight
+            // Hover highlight — slightly lighter than background, no striping
             if row_resp.hovered() {
-                ui.painter().rect_filled(row_rect, 0.0, Color32::from_rgba_premultiplied(0, 210, 255, 18));
+                ui.painter().rect_filled(row_rect, 0.0, Color32::from_rgb(30, 30, 50));
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            } else if row_idx % 2 == 1 {
-                ui.painter().rect_filled(row_rect, 0.0, Color32::from_rgba_premultiplied(255, 255, 255, 5));
             }
 
             // Context menu on the entire row
