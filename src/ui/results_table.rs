@@ -31,7 +31,7 @@ impl Default for SortState {
 
 
 pub fn render(ui: &mut Ui, app: &mut NyxApp) {
-    let col_widths: [f32; 7] = [130.0, 170.0, 155.0, 140.0, 80.0, 150.0, 70.0];
+    let gap = 12.0;
     let headers = [
         ("IP", SortColumn::Ip),
         ("Hostname", SortColumn::Hostname),
@@ -42,41 +42,82 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
         ("Statut", SortColumn::Status),
     ];
 
-    // Header row - manual layout matching data columns
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 12.0;
-        ui.add_space(4.0);
-        for (i, (name, col)) in headers.iter().enumerate() {
-            let is_sorted = app.sort_state.column == *col;
-            let arrow = if is_sorted {
-                if app.sort_state.ascending { " ^" } else { " v" }
-            } else { "" };
-            let text = format!("{}{}", name, arrow);
-            let label = RichText::new(text).color(ACCENT_CYAN).strong().size(13.0);
-            let resp = ui.add_sized(
-                egui::vec2(col_widths[i], 20.0),
-                egui::Label::new(label).sense(egui::Sense::click()),
-            );
-            if resp.hovered() {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            }
-            if resp.clicked() {
-                if app.sort_state.column == *col {
-                    app.sort_state.ascending = !app.sort_state.ascending;
-                } else {
-                    app.sort_state.column = *col;
-                    app.sort_state.ascending = true;
-                }
-                app.sort_results();
-            }
+    // Header row with resizable separators
+    let header_height = 20.0;
+    let (header_rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), header_height),
+        egui::Sense::hover(),
+    );
+
+    let painter = ui.painter();
+    let mut x = header_rect.left() + 4.0;
+    let cy = header_rect.center().y;
+
+    for (i, (name, col)) in headers.iter().enumerate() {
+        let col_w = app.col_widths[i];
+        let is_sorted = app.sort_state.column == *col;
+        let arrow = if is_sorted {
+            if app.sort_state.ascending { " ^" } else { " v" }
+        } else { "" };
+        let text = format!("{}{}", name, arrow);
+
+        // Clickable header label area
+        let label_rect = egui::Rect::from_min_size(
+            egui::pos2(x, header_rect.top()),
+            egui::vec2(col_w, header_height),
+        );
+        let label_resp = ui.interact(label_rect, ui.id().with(("hdr", i)), egui::Sense::click());
+        if label_resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
-    });
+        if label_resp.clicked() {
+            if app.sort_state.column == *col {
+                app.sort_state.ascending = !app.sort_state.ascending;
+            } else {
+                app.sort_state.column = *col;
+                app.sort_state.ascending = true;
+            }
+            app.sort_results();
+        }
+
+        painter.text(
+            egui::pos2(x + 2.0, cy),
+            egui::Align2::LEFT_CENTER,
+            &text,
+            egui::FontId::proportional(13.0),
+            ACCENT_CYAN,
+        );
+
+        x += col_w;
+
+        // Draggable resize handle between columns (except after last)
+        if i < 6 {
+            let handle_rect = egui::Rect::from_min_size(
+                egui::pos2(x, header_rect.top()),
+                egui::vec2(gap, header_height),
+            );
+            let handle_resp = ui.interact(handle_rect, ui.id().with(("resize", i)), egui::Sense::drag());
+            if handle_resp.hovered() || handle_resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            if handle_resp.dragged() {
+                let delta = handle_resp.drag_delta().x;
+                app.col_widths[i] = (app.col_widths[i] + delta).max(40.0);
+            }
+            // Draw subtle separator line
+            let sx = handle_rect.center().x;
+            painter.line_segment(
+                [egui::pos2(sx, header_rect.top() + 2.0), egui::pos2(sx, header_rect.bottom() - 2.0)],
+                egui::Stroke::new(1.0, Color32::from_rgb(50, 50, 70)),
+            );
+            x += gap;
+        }
+    }
 
     ui.separator();
 
     // Data rows in scrollable area
     let row_height = 22.0;
-    let col_widths: [f32; 7] = [130.0, 170.0, 155.0, 140.0, 80.0, 150.0, 70.0];
 
     ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
         for result in app.results.iter() {
@@ -95,7 +136,7 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
 
 
             // Allocate full row rect for hover detection
-            let total_width: f32 = col_widths.iter().sum::<f32>() + 12.0 * 6.0;
+            let total_width: f32 = app.col_widths.iter().sum::<f32>() + gap * 6.0;
             let available_w = ui.available_width().max(total_width);
             let (row_rect, row_resp) = ui.allocate_exact_size(
                 egui::vec2(available_w, row_height),
@@ -194,7 +235,7 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
                     (*f).clone(),
                     *color,
                 );
-                x += col_widths[i] + 12.0;
+                x += app.col_widths[i] + gap;
             }
         }
     });

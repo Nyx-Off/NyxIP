@@ -21,6 +21,7 @@ pub struct NyxApp {
     pub show_credits: bool,
     pub show_easter_egg: bool,
     pub konami_buffer: Vec<egui::Key>,
+    pub col_widths: [f32; 7],
 
     // Async channels
     result_rx: Option<mpsc::UnboundedReceiver<ScanResult>>,
@@ -50,6 +51,7 @@ impl NyxApp {
             show_credits: false,
             show_easter_egg: false,
             konami_buffer: Vec::new(),
+            col_widths: [130.0, 170.0, 155.0, 140.0, 80.0, 150.0, 70.0],
             result_rx: None,
             progress_rx: None,
             cancel_notify: None,
