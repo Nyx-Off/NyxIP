@@ -1,0 +1,28 @@
+[package]
+name = "nyxip"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.31"
+egui = "0.31"
+tokio = { version = "1", features = ["full"] }
+dns-lookup = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+open = "5"
+rust_xlsxwriter = "0.94"
+
+[dependencies.windows]
+version = "0.61"
+features = [
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_System_IO",
+]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
