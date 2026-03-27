@@ -118,123 +118,125 @@ impl NyxApp {
         });
     }
 
-    pub fn export_csv(&mut self) {
+    pub fn export(&mut self) {
+        let path = rfd::FileDialog::new()
+            .set_title("Exporter les resultats")
+            .set_file_name("nyxip_scan")
+            .add_filter("Excel (*.xlsx)", &["xlsx"])
+            .add_filter("CSV (*.csv)", &["csv"])
+            .save_file();
+
+        let path = match path {
+            Some(p) => p,
+            None => return,
+        };
+
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("xlsx");
+
+        let result = if ext == "csv" {
+            self.export_as_csv(&path)
+        } else {
+            self.export_as_xlsx(&path)
+        };
+
+        match result {
+            Ok(_) => {
+                self.error_message = Some(format!("Export sauvegarde: {}", path.display()));
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Erreur export: {}", e));
+            }
+        }
+    }
+
+    fn export_as_csv(&self, path: &std::path::Path) -> Result<(), String> {
+        let mut csv = String::from("IP,Hostname,MAC,Vendor,Latence (ms),Ports,Statut\n");
+        for r in &self.results {
+            let host = if r.hostname.is_empty() { "" } else { &r.hostname };
+            let mac = if r.mac.is_empty() { "" } else { &r.mac };
+            let vendor = if r.vendor.is_empty() { "" } else { &r.vendor };
+            let lat = r.latency_ms.map(|l| format!("{:.0}", l)).unwrap_or_default();
+            let ports = r.open_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(";");
+            csv.push_str(&format!("{},{},{},{},{},{},{}\n",
+                r.ip, host, mac, vendor, lat, ports, r.status));
+        }
+        std::fs::write(path, csv).map_err(|e| e.to_string())
+    }
+
+    fn export_as_xlsx(&self, path: &std::path::Path) -> Result<(), String> {
         use rust_xlsxwriter::*;
 
         let mut workbook = Workbook::new();
         let sheet = workbook.add_worksheet();
         sheet.set_name("NyxIP Scan").ok();
 
-        // Title format
         let title_fmt = Format::new()
-            .set_font_size(16)
-            .set_bold()
+            .set_font_size(16).set_bold()
             .set_font_color(Color::RGB(0x00D2FF));
-
-        // Header format - dark background, cyan text, bold
         let header_fmt = Format::new()
-            .set_bold()
-            .set_font_color(Color::White)
+            .set_bold().set_font_color(Color::White)
             .set_background_color(Color::RGB(0x1A1A2E))
             .set_border(FormatBorder::Thin)
-            .set_border_color(Color::RGB(0x00D2FF))
-            .set_font_size(11);
-
-        // Data format
+            .set_border_color(Color::RGB(0x00D2FF)).set_font_size(11);
         let data_fmt = Format::new()
             .set_border(FormatBorder::Thin)
-            .set_border_color(Color::RGB(0x333355))
-            .set_font_size(10);
-
-        // Alive format - green text
+            .set_border_color(Color::RGB(0x333355)).set_font_size(10);
         let alive_fmt = Format::new()
             .set_font_color(Color::RGB(0x00E676))
             .set_border(FormatBorder::Thin)
             .set_border_color(Color::RGB(0x333355))
-            .set_bold()
-            .set_font_size(10);
-
-        // Dead format - red text
+            .set_bold().set_font_size(10);
         let dead_fmt = Format::new()
             .set_font_color(Color::RGB(0xFF5252))
             .set_border(FormatBorder::Thin)
             .set_border_color(Color::RGB(0x333355))
-            .set_bold()
-            .set_font_size(10);
-
-        // MAC format - purple text
+            .set_bold().set_font_size(10);
         let mac_fmt = Format::new()
             .set_font_color(Color::RGB(0x9664FF))
             .set_border(FormatBorder::Thin)
-            .set_border_color(Color::RGB(0x333355))
-            .set_font_size(10);
-
-        // Port format - orange text
+            .set_border_color(Color::RGB(0x333355)).set_font_size(10);
         let port_fmt = Format::new()
             .set_font_color(Color::RGB(0xFFAB40))
             .set_border(FormatBorder::Thin)
-            .set_border_color(Color::RGB(0x333355))
-            .set_font_size(10);
+            .set_border_color(Color::RGB(0x333355)).set_font_size(10);
 
-        // Title row
         let _ = sheet.write_string_with_format(0, 0, "NyxIP Scan Report", &title_fmt);
         let alive = self.results.iter().filter(|r| r.status == crate::scanner::types::HostStatus::Alive).count();
         let _ = sheet.write_string(1, 0, &format!("Date: {} | Total: {} | Alive: {} | Dead: {}",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
             self.results.len(), alive, self.results.len() - alive));
 
-        // Column widths
-        let _ = sheet.set_column_width(0, 16);  // IP
-        let _ = sheet.set_column_width(1, 25);  // Hostname
-        let _ = sheet.set_column_width(2, 20);  // MAC
-        let _ = sheet.set_column_width(3, 20);  // Vendor
-        let _ = sheet.set_column_width(4, 12);  // Latence
-        let _ = sheet.set_column_width(5, 25);  // Ports
-        let _ = sheet.set_column_width(6, 10);  // Statut
+        for (i, w) in [16, 25, 20, 20, 12, 25, 10].iter().enumerate() {
+            let _ = sheet.set_column_width(i as u16, *w);
+        }
 
-        // Headers at row 3
         let headers = ["IP", "Hostname", "MAC", "Vendor", "Latence (ms)", "Ports", "Statut"];
         for (col, h) in headers.iter().enumerate() {
             let _ = sheet.write_string_with_format(3, col as u16, *h, &header_fmt);
         }
 
-        // Data rows starting at row 4
         for (i, r) in self.results.iter().enumerate() {
             let row = (i + 4) as u32;
             let _ = sheet.write_string_with_format(row, 0, &r.ip.to_string(), &data_fmt);
-            let host = if r.hostname.is_empty() { "—" } else { &r.hostname };
-            let _ = sheet.write_string_with_format(row, 1, host, &data_fmt);
-            let mac = if r.mac.is_empty() { "—" } else { &r.mac };
-            let _ = sheet.write_string_with_format(row, 2, mac, &mac_fmt);
-            let vendor = if r.vendor.is_empty() { "—" } else { &r.vendor };
-            let _ = sheet.write_string_with_format(row, 3, vendor, &data_fmt);
+            let _ = sheet.write_string_with_format(row, 1, if r.hostname.is_empty() { "—" } else { &r.hostname }, &data_fmt);
+            let _ = sheet.write_string_with_format(row, 2, if r.mac.is_empty() { "—" } else { &r.mac }, &mac_fmt);
+            let _ = sheet.write_string_with_format(row, 3, if r.vendor.is_empty() { "—" } else { &r.vendor }, &data_fmt);
             let lat = r.latency_ms.map(|l| format!("{:.0}", l)).unwrap_or_else(|| "—".to_string());
             let _ = sheet.write_string_with_format(row, 4, &lat, &data_fmt);
             let ports = if r.open_ports.is_empty() { "—".to_string() } else { r.open_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ") };
             let _ = sheet.write_string_with_format(row, 5, &ports, &port_fmt);
-
-            let status_str = r.status.to_string();
             let sfmt = match r.status {
                 crate::scanner::types::HostStatus::Alive => &alive_fmt,
                 crate::scanner::types::HostStatus::Dead => &dead_fmt,
                 _ => &data_fmt,
             };
-            let _ = sheet.write_string_with_format(row, 6, &status_str, sfmt);
+            let _ = sheet.write_string_with_format(row, 6, &r.status.to_string(), sfmt);
         }
 
-        // Add autofilter on headers
         let last_row = (self.results.len() + 3) as u32;
         let _ = sheet.autofilter(3, 0, last_row, 6);
 
-        let filename = format!("nyxip_scan_{}.xlsx", chrono::Local::now().format("%Y%m%d_%H%M%S"));
-        match workbook.save(&filename) {
-            Ok(_) => {
-                self.error_message = Some(format!("Export sauvegardé: {}", filename));
-            }
-            Err(e) => {
-                self.error_message = Some(format!("Erreur export: {}", e));
-            }
-        }
+        workbook.save(path.to_str().unwrap_or("export.xlsx")).map_err(|e| e.to_string())
     }
 
     fn poll_results(&mut self) {
@@ -335,12 +337,12 @@ impl eframe::App for NyxApp {
         });
 
         // Credits window
-        egui::Window::new("Crédits")
+        egui::Window::new("Credits")
             .open(&mut self.show_credits)
             .collapsible(false)
             .resizable(false)
             .min_width(320.0)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .default_pos(egui::pos2(380.0, 180.0))
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(8.0);

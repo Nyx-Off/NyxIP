@@ -65,7 +65,7 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
                 Vec2::new(100.0, 24.0),
                 egui::Button::new(RichText::new("📋 Exporter").color(TEXT_PRIMARY))
             ).clicked() {
-                app.export_csv();
+                app.export();
             }
         }
 
@@ -96,16 +96,23 @@ pub fn render(ui: &mut Ui, app: &mut NyxApp) {
             // Background
             painter.rect_filled(rect, 4.0, BG_WIDGET);
             // Filled portion
-            let mut filled = rect;
-            filled.set_width(rect.width() * progress);
-            painter.rect_filled(filled, 4.0, ACCENT_CYAN);
-            // Text - dark color for contrast on cyan bar
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                &text,
-                egui::FontId::proportional(12.0),
-                BG_DARK,
+            let filled_width = rect.width() * progress;
+            let mut filled_rect = rect;
+            filled_rect.set_width(filled_width);
+            painter.rect_filled(filled_rect, 4.0, ACCENT_CYAN);
+
+            // Draw text twice with clipping for dual-color effect:
+            // White text on the unfilled (dark) part, dark text on the filled (cyan) part
+            let font = egui::FontId::proportional(12.0);
+            let text_pos = rect.center();
+
+            // First: white text everywhere (will be behind the dark text on filled area)
+            painter.text(text_pos, egui::Align2::CENTER_CENTER, &text, font.clone(), Color32::WHITE);
+
+            // Second: dark text clipped to the filled area only
+            let clip_rect = filled_rect;
+            painter.with_clip_rect(clip_rect).text(
+                text_pos, egui::Align2::CENTER_CENTER, &text, font, BG_DARK,
             );
         }
     }
